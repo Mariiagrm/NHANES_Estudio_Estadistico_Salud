@@ -1,68 +1,68 @@
-# Spotify Popularity Analysis (Linear Regression + Bootstrapping)
+# NHANES: salud cardiovascular y metabólica (Regresión lineal + Ridge/Lasso)
 
-I put this project together to figure out which audio features (like danceability, energy, valence, etc.) actually drive a song's popularity on Spotify right now.
+Dataset consolidado de **NHANES** (National Health and Nutrition Examination Survey, CDC) para trabajar dos preguntas:
 
-Instead of just fitting a standard OLS linear regression, I implemented a bootstrapping approach. Music data is super noisy, hits are massive outliers, and the data rarely fits strict homoscedasticity assumptions. Bootstrapping the regression gives us empirical confidence intervals for the coefficients, so we can see which features *consistently* matter without relying on perfect data distributions.
+1. **Regresión lineal:** predecir la presión arterial sistólica (`sbp`) o el IMC (`bmi`) a partir de la edad, el colesterol total, los triglicéridos y la glucosa en ayunas.
+2. **Regularización (Ridge / Lasso):** meter todo el panel de biomarcadores de laboratorio (lípidos, minerales, PCR, función hepática y renal, hemograma), muy correlacionados entre sí, y ver cuáles conserva Lasso.
 
-## Tech Stack
+Los datos se descargan **directamente de la web del CDC**, sin claves, sin paquetes externos y sin buscar archivos a mano.
 
-* **Python 3.10+**
-* **Requests** (for pulling the daily charts and the audio features)
-* **Pandas & NumPy** (data manipulation)
-* **Statsmodels / Scikit-learn** (modeling)
-* **Matplotlib / Seaborn** (for plotting the coefficient distributions)
+## Cómo empezar
 
-## Where the data comes from
-
-Since November 2024, the Spotify Web API no longer gives new apps access to `audio-features` or to editorial playlists like the Top 50 Global. That makes the classic `spotipy` approach a dead end, so the data comes from these sources instead:
-
-* **[kworb.net](https://kworb.net/spotify/)**: daily mirrors of the official Spotify Top 200 charts per country, including daily streams, 7-day streams, days on chart and peak position.
-* **[ReccoBeats API](https://reccobeats.com/)**: a free API (no key needed) that returns the same audio features Spotify used to provide, looked up by Spotify track ID.
-* **[Spotify Tracks Dataset](https://huggingface.co/datasets/maharshipandya/spotify-tracks-dataset)**: an older, larger dataset (~114k tracks across 114 genres) that still has the original Spotify `popularity` score (0-100). It's useful for comparison.
-
-Popularity is measured with **daily streams** in the current-songs dataset, since the Spotify `popularity` score is no longer available. I use `log(daily_streams)` as the response variable because stream counts are heavily skewed.
-
-## Getting Started
-
-No API keys needed.
-
-1. Clone the repo:
-```bash
-git clone https://github.com/Mariiagrm/Linear_Regression_Spotify_Songs.git
-cd Linear_Regression_Spotify_Songs
-```
-
-2. Install the required libraries:
 ```bash
 pip install -r requirements.txt
+python get_data.py                 # ciclos 2015-2016 + 2017-2018 (por defecto)
+python get_data.py 2017-2018       # o un solo ciclo
 ```
 
-## How to use it
+La primera ejecución descarga ~37 MB de archivos `.xpt` a `data/raw/`, que quedan en caché. Después genera:
 
-1. **`get_current_data.py`**: run this one first. It downloads today's Top 200 daily charts from 12 countries (Spain, US, France, UK, Germany, Italy, Mexico, Brazil, Argentina, Canada, Australia and the Netherlands). It then pulls the audio features for every song and saves two files to `data/`:
-   * `spotify_top200_songs_<date>.csv` has **one row per unique song**, with streams summed across countries, `n_countries` and `best_rank`. This is the one to use for the regression.
-   * `spotify_top200_countries_<date>.csv` has **one row per (country, song)**.
-
-   To add or remove countries, edit the `COUNTRIES` dict at the top of the script.
-2. **`get_data.py`** (optional): downloads and cleans the bigger Spotify Tracks Dataset into `data/spotify_tracks_clean.csv` (~90k unique songs).
-3. **`analysis.ipynb`** *(work in progress)*: loads the CSV, fits the regression, runs $B=2000$ bootstrap iterations and plots the 95% confidence intervals for each audio feature.
-
-### Variables
-
-| Type | Columns |
+| Archivo | Contenido |
 |---|---|
-| Response (y) | `daily_streams` (use the log), `streams_7day`, `best_rank` |
-| Audio features (X) | `danceability`, `energy`, `valence`, `acousticness`, `instrumentalness`, `speechiness`, `liveness`, `loudness`, `tempo`, `key`, `mode` |
-| Controls | `n_countries`, `max_days_on_chart` |
+| `data/nhanes_cardiometabolic_clean.csv` | **El que hay que usar.** 10.739 adultos (≥ 20 años) × 73 columnas con nombres legibles |
+| `data/nhanes_cardiometabolic_raw.csv` | Todos los participantes y las 287 columnas originales del CDC, unidas por `SEQN` |
 
-## Known Issues & To-Do
+### Cargar otros archivos de NHANES
 
-* [ ] **Missing audio features:** ReccoBeats doesn't have every song. The newest releases and local hits are often missing, so only about 54% of the chart songs make it into the dataset. This could bias the sample toward slightly older hits.
-* [ ] **Selection bias:** every song in the charts is already a hit. The model explains what separates big hits from smaller ones, not what makes a song popular in the first place.
-* [ ] **Country-level data:** in the per-country file, the same song shows up in several rows. If you use it, add country dummies and resample by song (cluster bootstrap) instead of by row.
-* [ ] **Non-linear relationships:** the current model is strictly linear. I might add polynomial features later, since things like `tempo` probably have a "sweet spot" rather than a strictly linear relationship with popularity.
-* [ ] Build the analysis notebook and clean up the histogram plots for the bootstrap distributions.
+`nhanes.py` sirve para cualquier componente y ciclo (1999-2023):
 
-## License
+```python
+import nhanes
+vitd = nhanes.load("VID", "2017-2018")                          # vitamina D
+df = nhanes.load_many(["DEMO", "BMX", "FERTIN"], ["2015-2016", "2017-2018"])
+```
 
-MIT. Feel free to use this for your own classes or projects.
+Los nombres de componente (`DEMO`, `BIOPRO`, `FERTIN`...) son los del [buscador de variables del CDC](https://wwwn.cdc.gov/nchs/nhanes/search/default.aspx).
+
+## Variables del dataset limpio
+
+| Grupo | Columnas |
+|---|---|
+| Diseño muestral | `seqn`, `cycle`, `psu`, `strata`, `wt_mec`, `wt_fasting`, `fasting_subsample` |
+| Demografía | `age` (máx. 80), `sex`, `race_eth`, `education`, `income_poverty_ratio` |
+| Exploración | `sbp`, `dbp` (media de hasta 4 lecturas), `sbp1`, `dbp1` (1.ª lectura = `BPXSY1`/`BPXDI1`), `pulse`, `weight`, `height`, `bmi`, `waist` |
+| Cuestionarios | `smoking` (never/former/current), `diabetes_dx`, `hypertension_dx`, `bp_meds`, `chol_meds` |
+| Lípidos y glucosa | `total_chol`, `hdl`, `ldl`\*, `triglycerides`\*, `glucose_fasting`\*, `insulin`\*, `hba1c` |
+| Inflamación | `hs_crp` (proteína C reactiva ultrasensible) |
+| Hígado | `alt`, `ast`, `alp`, `ggt`, `ldh`, `bilirubin`, `albumin`, `total_protein`, `globulin` |
+| Riñón | `creatinine`, `bun`, `uric_acid` |
+| Electrolitos y minerales | `sodium`, `potassium`, `chloride`, `bicarbonate`, `calcium`, `phosphorus`, `iron`, `osmolality` |
+| Bioquímica sin ayuno | `glucose_serum`, `chol_serum`, `trig_serum`, `cpk` |
+| Hemograma | `wbc`, `lymph_pct`, `mono_pct`, `neut_pct`, `eos_pct`, `baso_pct`, `rbc`, `hemoglobin`, `hematocrit`, `mcv`, `mch`, `mchc`, `rdw`, `platelets`, `mpv` |
+
+Unidades: las convencionales de EE. UU. (mg/dL para lípidos y glucosa, mmHg, kg, cm, mg/L para PCR).
+Los códigos "No sabe" / "Se niega" ya están convertidos a `NaN`.
+
+\* **Submuestra en ayunas.** Triglicéridos, LDL, glucosa en ayunas e insulina solo se midieron en la sesión de mañana (`fasting_subsample == True`, ~4.500 adultos). El modelo `sbp ~ age + total_chol + triglycerides + glucose_fasting` tiene **4.488 casos completos**.
+
+## Cosas a tener en cuenta
+
+* **Multicolinealidad (a propósito).** Hay pares casi redundantes, justo lo que necesita Ridge/Lasso: `total_chol`–`chol_serum` (r = 0,99), `hemoglobin`–`hematocrit` (0,97), `glucose_fasting`–`hba1c` (0,85), `sodium`–`osmolality` (0,81), `ast`–`alt` (0,73). Además `globulin = total_protein − albumin` es una combinación lineal exacta.
+* **Medicación.** Quien toma antihipertensivos (`bp_meds`) o estatinas (`chol_meds`) tiene la PA o el colesterol tratados; conviene incluirlo como control o excluir a esas personas.
+* **Asimetría.** `triglycerides`, `insulin`, `hs_crp`, `ggt`, `alt` y `cpk` tienen colas largas: mejor usar el logaritmo. Estandariza siempre antes de Ridge/Lasso.
+* **Pesos muestrales.** NHANES no es una muestra aleatoria simple: sobrerrepresenta algunos grupos. Para estimar prevalencias o medias poblacionales usa `wt_mec` (o `wt_fasting` con variables de la submuestra en ayunas) junto con `psu` y `strata`. Al combinar ciclos el peso ya está dividido entre el número de ciclos, como indica el CDC. Para un ejercicio de regresión sin pesos es habitual, pero hay que mencionarlo.
+* **Ciclos.** 2015-2016 y 2017-2018 tienen exactamente las mismas variables. A partir de 2017-2020 (pre-pandemia) y 2021-2023 la presión se mide con oscilómetro (`BPXO`, sin `BPXSY1`) y falta parte del panel, así que `get_data.py` no está pensado para esos ciclos.
+
+## Fuente
+
+Centers for Disease Control and Prevention (CDC), National Center for Health Statistics (NCHS). *National Health and Nutrition Examination Survey Data*. Hyattsville, MD: U.S. Department of Health and Human Services. <https://wwwn.cdc.gov/nchs/nhanes/>. Los datos son de dominio público.

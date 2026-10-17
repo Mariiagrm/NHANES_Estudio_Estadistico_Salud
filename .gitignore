@@ -1,3 +1,5 @@
 __pycache__/
 .ipynb_checkpoints/
 .venv/
+# caché de los .xpt del CDC (se regenera con get_data.py)
+data/raw/
