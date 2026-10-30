@@ -53,7 +53,11 @@ Los nombres de componente (`DEMO`, `BIOPRO`, `FERTIN`...) son los del [buscador 
 Unidades: las convencionales de EE. UU. (mg/dL para lípidos y glucosa, mmHg, kg, cm, mg/L para PCR).
 Los códigos "No sabe" / "Se niega" ya están convertidos a `NaN`.
 
-\* **Submuestra en ayunas.** Triglicéridos, LDL, glucosa en ayunas e insulina solo se midieron en la sesión de mañana (`fasting_subsample == True`, ~4.500 adultos). El modelo `sbp ~ age + total_chol + triglycerides + glucose_fasting` tiene **4.488 casos completos**.
+\* **Submuestra en ayunas.** "En ayunas" significa que la muestra de sangre se extrajo después de pasar al menos ~9 horas sin comer ni beber nada salvo agua (en la práctica, sin desayunar). Es necesario porque la glucosa, los triglicéridos y la insulina suben tras una comida y su valor dependería de cuándo y qué comió cada persona; en ayunas se mide el nivel basal, que es el que se usa en clínica (p. ej., glucosa en ayunas ≥ 126 mg/dL indica diabetes). El LDL no se mide directamente, sino que se calcula a partir de los triglicéridos (fórmula de Friedewald), por eso también requiere ayuno.
+
+En NHANES solo a los participantes citados a la **sesión de mañana** se les pidió que acudieran en ayunas, y solo a ellos se les hicieron estas cuatro pruebas. Quienes no cumplieron el ayuno (menos de 8,5 h o más de 24 h) reciben peso `wt_fasting = 0`. La columna `fasting_subsample` vale `True` cuando `wt_fasting > 0`, es decir, cuando la persona está en la submuestra con un ayuno válido (~4.500 adultos). El resto tiene `NaN` en `ldl`, `triglycerides`, `glucose_fasting` e `insulin`: no es un fallo del dataset, sino que no les correspondía la prueba. El modelo `sbp ~ age + total_chol + triglycerides + glucose_fasting` tiene **4.488 casos completos**.
+
+Por contraste, las columnas de **bioquímica sin ayuno** (`glucose_serum`, `chol_serum`, `trig_serum`) se midieron a todos los participantes, a cualquier hora y sin exigir ayuno, así que hay muchos más casos, pero los valores son más ruidosos.
 
 ## Cosas a tener en cuenta
 
